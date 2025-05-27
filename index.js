@@ -146,7 +146,11 @@ app.put("/taskovi/:id", (req, res) => {
 app.get("/search", (req, res) => {
     const searchTerm = req.query.term;
     if (!searchTerm) {
-        return res.status(400).json({error: 'Search term is required'});
+        db.query('SELECT * FROM taskovi', (err, results) => {
+            if (err) return res.status(500).send(err);
+            res.json(results);
+            console.log(results);
+        });
     }
     const query = `SELECT * FROM taskovi WHERE naslov LIKE ? OR opis LIKE ?`;
     const searchValue = `%${searchTerm}%`
@@ -184,6 +188,52 @@ app.get("/orderby/:order", (req, res) => {
     db.query(query, (err, results) => {
         if (err) return res.status(500).send(err);
         res.json(results);
+    });
+});
+
+app.post("/login", async (req, res) => {
+    const { username, sifra } = req.body;
+
+    if (!username || !sifra) {
+        return res.status(400).send("Username i šifra su obavezni.");
+    }
+
+    db.query('SELECT * FROM korisnik WHERE username = ?', [username], async (err, results) => {
+        if (err) {
+            console.error("Greška pri traženju korisnika:", err.sqlMessage || err);
+            return res.status(500).send("Greška na serveru.");
+        }
+
+
+        if (results.length > 0) {
+            // Postoji korisnik, proveri šifru
+            const korisnik = results[0];
+            const match = await bcrypt.compare(sifra, korisnik.sifra);
+            if (match) {
+                return res.status(200).json({ id: korisnik.id });
+            } else {
+                return res.status(401).send("Pogrešna šifra.");
+            }
+        } else {
+            // Ne postoji korisnik, kreiraj ga
+            try {
+                const hash = await bcrypt.hash(sifra, saltRounds);
+                db.query(
+                    'INSERT INTO korisnik (username, sifra) VALUES (?, ?)',
+                    [username, hash],
+                    (err, result) => {
+                        if (err) {
+                            console.error("Greška pri kreiranju korisnika:", err);
+                            return res.status(500).send("Greška pri dodavanju korisnika.");
+                        }
+                        return res.status(201).json({ id: result.insertId });
+                    }
+                );
+            } catch (e) {
+                console.error("Greška pri hesiranju:", e);
+                return res.status(500).send("Greška pri obradi šifre.");
+            }
+        }
     });
 });
 
