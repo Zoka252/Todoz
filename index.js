@@ -1,6 +1,8 @@
 const express=require("express");
 const mysql = require('mysql2');
 const cors=require("cors");
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
 const app=express();
 app.use(cors());
@@ -34,17 +36,37 @@ db.query('SELECT * FROM taskovi', (err, results) => {
 });
 });
 
+app.get("/taskovi/:id", (req, res) => {
+    const id = req.params.id;
+    db.query('SELECT * FROM taskovi WHERE id = ? ', [req.params.id],(err, results) => {
+        if (err) return res.status(500).send(err);
+        res.json(results);
+        console.log(results);
+    });
+});
+
+
+
 app.post("/taskovi", (req, res) => {
 
-    const {naslov,opis, korisnikov_id, kraj, tip_id} = req.body;
+    const {naslov,opis, korisnikov_id, kraj, deskripcija , tip_id, izvrsenje, napravljeno} = req.body;
 
-    if (!naslov || !opis || !korisnikov_id || !kraj || !tip_id) {
+    if (
+        naslov === undefined || naslov === '' ||
+        opis === undefined || opis === '' ||
+        korisnikov_id === undefined ||
+        kraj === undefined || kraj === '' ||
+        deskripcija === undefined || deskripcija === '' ||
+        tip_id === undefined ||
+        izvrsenje === undefined ||
+        napravljeno === undefined || napravljeno === ''
+    ) {
         return res.status(400).send('Svi podaci su obavezni');
     }
 
     db.query(
-        'INSERT INTO taskovi (naslov,opis, korisnikov_id, kraj, tip_id) VALUES (?, ? , ?, ?, ?)',
-        [naslov, opis , korisnikov_id, kraj, tip_id],
+        'INSERT INTO taskovi (naslov,opis, korisnikov_id, kraj,deskripcija, tip_id, izvrsenje, napravljeno) VALUES (?,?,?, ? , ?, ?, ?, ?)',
+        [naslov, opis , korisnikov_id, kraj,deskripcija, tip_id,izvrsenje,napravljeno],
         (err, results) => {
             if (err) {
                 console.error('Greska', err);
@@ -69,9 +91,9 @@ app.delete("/taskovi/:id", (req, res) => {
 
 app.put("/taskovi/:id", (req, res) => {
     const {id} = req.params;
-    const {naslov,opis, korisnikov_id, kraj, tip_id} = req.body;
+    const {naslov,opis, korisnikov_id, kraj, deskripcija, tip_id} = req.body;
 
-    if (!naslov && !opis && !korisnikov_id && !kraj && !tip_id ) {
+    if (!naslov && !opis && !korisnikov_id && !kraj && !tip_id && !deskripcija) {
         return res.status(400).send('Nijedan podatak nije poslat za azuriranje');
     }
 
@@ -102,6 +124,10 @@ app.put("/taskovi/:id", (req, res) => {
         query += ' tip_id = ?,';
         values.push(tip_id);
     }
+    if (deskripcija){
+        query += ' deskripcija = ?,';
+        values.push(deskripcija);
+    }
 
     query = query.slice(0,-1)
     query += ' WHERE id = ?';
@@ -117,6 +143,49 @@ app.put("/taskovi/:id", (req, res) => {
 
 })
 
+app.get("/search", (req, res) => {
+    const searchTerm = req.query.term;
+    if (!searchTerm) {
+        return res.status(400).json({error: 'Search term is required'});
+    }
+    const query = `SELECT * FROM taskovi WHERE naslov LIKE ? OR opis LIKE ?`;
+    const searchValue = `%${searchTerm}%`
+
+    db.query(query,[searchValue,searchValue], (err, results) => {
+        if (err){
+            console.error('Greska',err);
+            return res.status(500),json({error: 'Search term is required'});
+
+        }
+        res.json(results);
+    });
+});
+
+app.get("/orderby/:order", (req, res) => {
+    const orderParams = req.params.order.toLowerCase(); // "kraj_asc", "naslov_desc"
+    let query = 'SELECT * FROM taskovi';
+    let orderUslov = '';
+
+    // Dozvoljene kombinacije
+    const validOrders = {
+        'kraj_asc': ' ORDER BY kraj ASC',
+        'kraj_desc': ' ORDER BY kraj DESC',
+        'naslov_asc': ' ORDER BY naslov ASC',
+        'naslov_desc': ' ORDER BY naslov DESC'
+    };
+
+    // Ako je validan parametar, dodaj ORDER BY
+    if (validOrders[orderParams]) {
+        orderUslov = validOrders[orderParams];
+    }
+
+    query += orderUslov;
+
+    db.query(query, (err, results) => {
+        if (err) return res.status(500).send(err);
+        res.json(results);
+    });
+});
 
 
 app.listen(3001, () => {
