@@ -1,176 +1,185 @@
-const express=require("express");
+const express = require("express");
 const mysql = require('mysql2');
-const cors=require("cors");
+const cors = require("cors");
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
 
-const app=express();
+const app = express();
 app.use(cors());
 app.use(express.json());
 
-const db=mysql.createConnection({
-    host:"localhost",
-    user:"root",
-    password:"",
-    database:"todoz",
-    port:3306,
-})
+const db = mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "",
+    database: "todoz",
+    port: 3306,
+});
 
 db.connect(err => {
-    if (err){
-        console.error('Greska', err);
+    if (err) {
+        console.error('Greška prilikom povezivanja sa bazom:', err);
         return;
-}
-    console.log('Povezan')
-})
+    }
+    console.log('Povezan sa bazom!');
+});
 
+// Osnovna ruta
 app.get("/", (req, res) => {
     res.send("Dobrodošao na backend!");
 });
 
+// GET taskovi za određenog korisnika
 app.get("/taskovi", (req, res) => {
-db.query('SELECT * FROM taskovi', (err, results) => {
-    if (err) return res.status(500).send(err);
-    res.json(results);
-    console.log(results);
-});
-});
+    const userId = req.query.userId;
 
-app.get("/taskovi/:id", (req, res) => {
-    const id = req.params.id;
-    db.query('SELECT * FROM taskovi WHERE id = ? ', [req.params.id],(err, results) => {
-        if (err) return res.status(500).send(err);
+    if (!userId) {
+        return res.status(400).send("Nedostaje userId");
+    }
+
+    const sql = 'SELECT * FROM taskovi WHERE korisnikov_id = ?';
+
+    db.query(sql, [userId], (err, results) => {
+        if (err) {
+            console.error('Greška pri dohvatanju taskova:', err);
+            return res.status(500).send('Greška pri dohvatanju taskova');
+        }
         res.json(results);
-        console.log(results);
     });
 });
 
 
+app.get("/taskovi/:id", (req, res) => {
+    const { id } = req.params;
 
+    db.query('SELECT * FROM taskovi WHERE id = ?', [id], (err, results) => {
+        if (err) {
+            console.error('Greška pri dohvatanju taska:', err);
+            return res.status(500).send('Greška pri dohvatanju taska');
+        }
+        if (results.length === 0) {
+            return res.status(404).send('Task nije pronađen');
+        }
+        res.json(results[0]);
+    });
+});
+
+
+// POST dodavanje taska
 app.post("/taskovi", (req, res) => {
-
-    const {naslov,opis, korisnikov_id, kraj, deskripcija , tip_id, izvrsenje, napravljeno} = req.body;
+    const { naslov, opis, korisnikov_id, kraj, deskripcija, tip_id, izvrsenje, napravljeno } = req.body;
 
     if (
-        naslov === undefined || naslov === '' ||
-        opis === undefined || opis === '' ||
-        korisnikov_id === undefined ||
-        kraj === undefined || kraj === '' ||
-        deskripcija === undefined || deskripcija === '' ||
-        tip_id === undefined ||
-        izvrsenje === undefined ||
-        napravljeno === undefined || napravljeno === ''
+        !naslov || !opis || !korisnikov_id ||
+        !kraj || !deskripcija || tip_id === undefined ||
+        izvrsenje === undefined || !napravljeno
     ) {
         return res.status(400).send('Svi podaci su obavezni');
     }
 
-    db.query(
-        'INSERT INTO taskovi (naslov,opis, korisnikov_id, kraj,deskripcija, tip_id, izvrsenje, napravljeno) VALUES (?,?,?, ? , ?, ?, ?, ?)',
-        [naslov, opis , korisnikov_id, kraj,deskripcija, tip_id,izvrsenje,napravljeno],
-        (err, results) => {
-            if (err) {
-                console.error('Greska', err);
-                return res.status(500).send('Greška pri dodavanju taska');
-            }
-            res.status(201).send('Task je uspešno dodat!');
-        }
-    );
-})
+    const sql = 'INSERT INTO taskovi (naslov, opis, korisnikov_id, kraj, deskripcija, tip_id, izvrsenje, napravljeno) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+    const values = [naslov, opis, korisnikov_id, kraj, deskripcija, tip_id, izvrsenje, napravljeno];
 
-app.delete("/taskovi/:id", (req, res) => {
-    const {id} = req.params;
-    db.query('DELETE FROM taskovi WHERE id = ?', [req.params.id],
-        (err, results) => {
+    db.query(sql, values, (err, results) => {
         if (err) {
-            console.error('Greska pri brisanju', err)
-            return res.status(500).send('Greska pri dodavanju taska');
+            console.error('Greška pri dodavanju taska:', err);
+            return res.status(500).send('Greška pri dodavanju taska');
+        }
+        res.status(201).send('Task je uspešno dodat!');
+    });
+});
+
+// DELETE taska po id-u
+app.delete("/taskovi/:id", (req, res) => {
+    const { id } = req.params;
+    db.query('DELETE FROM taskovi WHERE id = ?', [id], (err, results) => {
+        if (err) {
+            console.error('Greška pri brisanju taska:', err);
+            return res.status(500).send('Greška pri brisanju taska');
         }
         res.send('Task je obrisan');
-        })
-})
+    });
+});
 
+// PUT update taska po id-u
 app.put("/taskovi/:id", (req, res) => {
-    const {id} = req.params;
-    const {naslov,opis, korisnikov_id, kraj, deskripcija, tip_id} = req.body;
+    const { id } = req.params;
+    const { naslov, opis, korisnikov_id, kraj, deskripcija, tip_id } = req.body;
 
     if (!naslov && !opis && !korisnikov_id && !kraj && !tip_id && !deskripcija) {
-        return res.status(400).send('Nijedan podatak nije poslat za azuriranje');
+        return res.status(400).send('Nijedan podatak nije poslat za ažuriranje');
     }
-
-
-
 
     let values = [];
     let query = 'UPDATE taskovi SET';
 
-
-    if (naslov){
+    if (naslov) {
         query += ' naslov = ?,';
         values.push(naslov);
     }
-    if (opis){
+    if (opis) {
         query += ' opis = ?,';
         values.push(opis);
     }
-    if (korisnikov_id){
+    if (korisnikov_id) {
         query += ' korisnikov_id = ?,';
         values.push(korisnikov_id);
     }
-    if (kraj){
+    if (kraj) {
         query += ' kraj = ?,';
         values.push(kraj);
     }
-    if (tip_id){
+    if (tip_id) {
         query += ' tip_id = ?,';
         values.push(tip_id);
     }
-    if (deskripcija){
+    if (deskripcija) {
         query += ' deskripcija = ?,';
         values.push(deskripcija);
     }
 
-    query = query.slice(0,-1)
+    query = query.slice(0, -1); // ukloni poslednji zarez
     query += ' WHERE id = ?';
     values.push(id);
 
     db.query(query, values, (err, results) => {
         if (err) {
-            console.error('Greška pri ažuriranju', err);
+            console.error('Greška pri ažuriranju taska:', err);
             return res.status(500).send('Greška pri ažuriranju taska');
         }
         res.send('Task je uspešno ažuriran!');
     });
+});
 
-})
-
+// GET pretraga po naslovu ili opisu
 app.get("/search", (req, res) => {
-    const searchTerm = req.query.term;
-    if (!searchTerm) {
-        db.query('SELECT * FROM taskovi', (err, results) => {
-            if (err) return res.status(500).send(err);
-            res.json(results);
-            console.log(results);
-        });
+    const searchTerm = req.query.term || '';
+    const userId = req.query.userId;
+
+    if (!userId) {
+        return res.status(400).send("Nedostaje userId");
     }
-    const query = `SELECT * FROM taskovi WHERE naslov LIKE ? OR opis LIKE ?`;
-    const searchValue = `%${searchTerm}%`
 
-    db.query(query,[searchValue,searchValue], (err, results) => {
-        if (err){
-            console.error('Greska',err);
-            return res.status(500),json({error: 'Search term is required'});
+    const searchValue = `%${searchTerm}%`;
+    const sql = `
+        SELECT * FROM taskovi 
+        WHERE korisnikov_id = ? 
+          AND (naslov LIKE ? OR opis LIKE ?)
+    `;
 
+    db.query(sql, [userId, searchValue, searchValue], (err, results) => {
+        if (err) {
+            console.error('Greška pri pretrazi:', err);
+            return res.status(500).json({ error: 'Greška pri pretrazi' });
         }
         res.json(results);
     });
 });
 
+// GET sortiranje taskova
 app.get("/orderby/:order", (req, res) => {
-    const orderParams = req.params.order.toLowerCase(); // "kraj_asc", "naslov_desc"
+    const orderParams = req.params.order.toLowerCase();
     let query = 'SELECT * FROM taskovi';
-    let orderUslov = '';
-
-    // Dozvoljene kombinacije
     const validOrders = {
         'kraj_asc': ' ORDER BY kraj ASC',
         'kraj_desc': ' ORDER BY kraj DESC',
@@ -178,12 +187,9 @@ app.get("/orderby/:order", (req, res) => {
         'naslov_desc': ' ORDER BY naslov DESC'
     };
 
-    // Ako je validan parametar, dodaj ORDER BY
     if (validOrders[orderParams]) {
-        orderUslov = validOrders[orderParams];
+        query += validOrders[orderParams];
     }
-
-    query += orderUslov;
 
     db.query(query, (err, results) => {
         if (err) return res.status(500).send(err);
@@ -191,6 +197,7 @@ app.get("/orderby/:order", (req, res) => {
     });
 });
 
+// POST login (ili registracija ako korisnik ne postoji)
 app.post("/login", async (req, res) => {
     const { username, sifra } = req.body;
 
@@ -204,9 +211,8 @@ app.post("/login", async (req, res) => {
             return res.status(500).send("Greška na serveru.");
         }
 
-
         if (results.length > 0) {
-            // Postoji korisnik, proveri šifru
+            // Korisnik postoji, proveri šifru
             const korisnik = results[0];
             const match = await bcrypt.compare(sifra, korisnik.sifra);
             if (match) {
@@ -215,7 +221,7 @@ app.post("/login", async (req, res) => {
                 return res.status(401).send("Pogrešna šifra.");
             }
         } else {
-            // Ne postoji korisnik, kreiraj ga
+            // Kreiraj novog korisnika
             try {
                 const hash = await bcrypt.hash(sifra, saltRounds);
                 db.query(
@@ -236,7 +242,6 @@ app.post("/login", async (req, res) => {
         }
     });
 });
-
 
 app.listen(3001, () => {
     console.log('Server radi na http://localhost:3001');
