@@ -32,13 +32,8 @@ app.get("/", (req, res) => {
 // GET taskovi za određenog korisnika
 app.get("/taskovi", (req, res) => {
     const userId = req.query.userId;
-
-    if (!userId) {
-        return res.status(400).send("Nedostaje userId");
-    }
-
+    if (!userId) {return res.status(400).send("Nedostaje userId");}
     const sql = 'SELECT * FROM taskovi WHERE korisnikov_id = ?';
-
     db.query(sql, [userId], (err, results) => {
         if (err) {
             console.error('Greška pri dohvatanju taskova:', err);
@@ -104,9 +99,9 @@ app.delete("/taskovi/:id", (req, res) => {
 // PUT update taska po id-u
 app.put("/taskovi/:id", (req, res) => {
     const { id } = req.params;
-    const { naslov, opis, korisnikov_id, kraj, deskripcija, tip_id } = req.body;
+    const { naslov, opis, korisnikov_id, kraj, deskripcija, tip_id, izvrsenje } = req.body;
 
-    if (!naslov && !opis && !korisnikov_id && !kraj && !tip_id && !deskripcija) {
+    if (!naslov && !opis && !korisnikov_id && !kraj && !tip_id && !deskripcija && typeof izvrsenje === 'undefined') {
         return res.status(400).send('Nijedan podatak nije poslat za ažuriranje');
     }
 
@@ -137,6 +132,10 @@ app.put("/taskovi/:id", (req, res) => {
         query += ' deskripcija = ?,';
         values.push(deskripcija);
     }
+    if (typeof izvrsenje !== 'undefined') {
+        query += ' izvrsenje = ?,';
+        values.push(izvrsenje);
+    }
 
     query = query.slice(0, -1); // ukloni poslednji zarez
     query += ' WHERE id = ?';
@@ -150,6 +149,7 @@ app.put("/taskovi/:id", (req, res) => {
         res.send('Task je uspešno ažuriran!');
     });
 });
+
 
 // GET pretraga po naslovu ili opisu
 app.get("/search", (req, res) => {
