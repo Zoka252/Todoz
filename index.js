@@ -197,7 +197,6 @@ app.get("/orderby/:order", (req, res) => {
     });
 });
 
-// POST login (ili registracija ako korisnik ne postoji)
 app.post("/login", async (req, res) => {
     const { username, sifra } = req.body;
 
@@ -212,7 +211,6 @@ app.post("/login", async (req, res) => {
         }
 
         if (results.length > 0) {
-            // Korisnik postoji, proveri šifru
             const korisnik = results[0];
             const match = await bcrypt.compare(sifra, korisnik.sifra);
             if (match) {
@@ -221,7 +219,26 @@ app.post("/login", async (req, res) => {
                 return res.status(401).send("Pogrešna šifra.");
             }
         } else {
-            // Kreiraj novog korisnika
+            return res.status(404).send("Korisnik ne postoji");
+        }
+    });
+});
+app.post("/register", async (req, res) => {
+    const { username, sifra } = req.body;
+
+    if (!username || !sifra) {
+        return res.status(400).send("Username i šifra su obavezni.");
+    }
+
+    db.query('SELECT * FROM korisnik WHERE username = ?', [username], async (err, results) => {
+        if (err) {
+            console.error("Greška pri traženju korisnika:", err);
+            return res.status(500).send("Greška na serveru.");
+        }
+
+        if (results.length > 0) {
+            return res.status(409).send("Korisnik već postoji.");
+        } else {
             try {
                 const hash = await bcrypt.hash(sifra, saltRounds);
                 db.query(
@@ -242,7 +259,6 @@ app.post("/login", async (req, res) => {
         }
     });
 });
-
 app.listen(3001, () => {
     console.log('Server radi na http://localhost:3001');
 });
