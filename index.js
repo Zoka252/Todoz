@@ -24,7 +24,6 @@ db.connect(err => {
     console.log('Povezan sa bazom!');
 });
 
-// Osnovna ruta
 app.get("/", (req, res) => {
     res.send("Dobrodošao na backend!");
 });
@@ -60,7 +59,7 @@ app.get("/taskovi/:id", (req, res) => {
 });
 
 
-// POST dodavanje taska
+//dodavanje taska
 app.post("/taskovi", (req, res) => {
     const { naslov, opis, korisnikov_id, kraj, deskripcija, tip_id, izvrsenje, napravljeno } = req.body;
 
@@ -84,7 +83,7 @@ app.post("/taskovi", (req, res) => {
     });
 });
 
-// DELETE taska po id-u
+// DELETE
 app.delete("/taskovi/:id", (req, res) => {
     const { id } = req.params;
     db.query('DELETE FROM taskovi WHERE id = ?', [id], (err, results) => {
@@ -96,7 +95,7 @@ app.delete("/taskovi/:id", (req, res) => {
     });
 });
 
-// PUT update taska po id-u
+// PUT
 app.put("/taskovi/:id", (req, res) => {
     const { id } = req.params;
     const { naslov, opis, korisnikov_id, kraj, deskripcija, tip_id, izvrsenje } = req.body;
@@ -151,7 +150,7 @@ app.put("/taskovi/:id", (req, res) => {
 });
 
 
-// GET pretraga po naslovu ili opisu
+// GET
 app.get("/search", (req, res) => {
     const searchTerm = req.query.term || '';
     const userId = req.query.userId;
@@ -176,7 +175,7 @@ app.get("/search", (req, res) => {
     });
 });
 
-// GET sortiranje taskova
+// GET
 app.get("/orderby/:order", (req, res) => {
     const orderParams = req.params.order.toLowerCase();
     let query = 'SELECT * FROM taskovi';
